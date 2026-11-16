@@ -107,7 +107,7 @@ Le modèle bat la baseline en 2023, 2024 et 2025, et dans **les 15 départements
 
 ![Courbe de calibration](images/calibration.png)
 
-Sur 2023-2025, le modèle attendait **4 655** jours-commune avec feu pour **4 137** réels (+12 %). Les probabilités sont fiables jusqu'à ≈ 1 % et légèrement surestimées au-delà. Par département, c'est plus contrasté : les Pyrénées-Orientales sont surestimées (×2,7), le Var et les Hautes-Alpes sous-estimés (≈ −35 %). Une recalibration par département est une piste naturelle.
+Sur 2023-2025, le modèle attendait **4 655** jours-commune avec feu pour **4 137** réels (+12 %). Les probabilités sont fiables jusqu'à ≈ 0,5 % (l'immense majorité des lignes) et surestimées de 15 à 45 % au-delà : quand le modèle annonce 13 %, on observe 11 %. Par département, c'est plus contrasté : les Pyrénées-Orientales sont surestimées (×2,7), le Var et les Hautes-Alpes sous-estimés (≈ −35 %). Une recalibration par département est une piste naturelle.
 
 ![Prévu vs réalisé, été 2023](images/prevu_vs_realise_2023.png)
 
