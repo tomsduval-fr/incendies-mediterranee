@@ -1,0 +1,538 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Risque incendie 2027 – Méditerranée</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+  :root {
+    --bg: #f5f3ef; --panel: #ffffff; --text: #1f1d1a; --muted: #6b665f; --faint: #9a948b;
+    --border: #e4dfd7; --accent: #c2410c; --accent-soft: #fdebdf; --band: #f59e0b; --hist: #7c3aed;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 2px 8px rgba(0,0,0,.04);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #151413; --panel: #201e1c; --text: #f1eee9; --muted: #a8a299; --faint: #7a746b;
+      --border: #38342f; --accent: #fb923c; --accent-soft: #3a2316; --band: #f59e0b; --hist: #a78bfa;
+      --shadow: none;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  button, input { font: inherit; color: inherit; }
+  header { padding: 18px 20px 10px; display: flex; flex-wrap: wrap; gap: 6px 24px; align-items: baseline; }
+  h1 { font-size: 21px; margin: 0; letter-spacing: -.01em; }
+  header p { margin: 0; color: var(--muted); }
+  details.aide { padding: 0 20px 8px; color: var(--muted); max-width: 1100px; }
+  details.aide summary { cursor: pointer; color: var(--accent); width: max-content; }
+  details.aide p { margin: 6px 0; }
+
+  /* ---- barre de filtres */
+  .filtres { position: sticky; top: 0; z-index: 1000; background: var(--bg); padding: 8px 20px 10px;
+             display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: flex-end; border-bottom: 1px solid var(--border); }
+  .f { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+  .f > span { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 9px; overflow: hidden; background: var(--panel); }
+  .seg button { border: 0; background: transparent; padding: 7px 11px; cursor: pointer; white-space: nowrap; }
+  .seg button + button { border-left: 1px solid var(--border); }
+  .seg button.on { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .seg button:disabled { opacity: .4; cursor: default; }
+  .semaine { display: flex; align-items: center; gap: 8px; }
+  .semaine input[type=range] { width: 220px; accent-color: var(--accent); }
+  .semaine b { min-width: 168px; font-weight: 600; }
+  .play { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border); background: var(--panel); cursor: pointer; }
+  .chips { display: flex; flex-wrap: wrap; gap: 5px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border); border-radius: 999px;
+          padding: 4px 10px 4px 6px; background: var(--panel); cursor: pointer; user-select: none; }
+  .chip i { width: 12px; height: 12px; border-radius: 50%; display: inline-block; }
+  .chip.off { opacity: .35; }
+  .f select { padding: 7px 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--panel); color: var(--text); font: inherit; max-width: 230px; }
+  .recherche input { width: 210px; padding: 7px 10px; border: 1px solid var(--border); border-radius: 9px; background: var(--panel); }
+  .toggle { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 6px 0; }
+  .toggle input { accent-color: var(--hist); }
+  .is-off { opacity: .4; pointer-events: none; }
+
+  /* ---- mise en page principale */
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; gap: 14px; padding: 14px 20px 20px; }
+  @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+  #map { height: calc(100vh - 210px); min-height: 520px; border-radius: 12px; border: 1px solid var(--border); }
+  @media (max-width: 1000px) { #map { height: 60vh; min-height: 380px; } }
+  aside { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 13px 15px; box-shadow: var(--shadow); }
+  .card h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+  .kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .kpi .v { font-size: 26px; font-weight: 700; color: var(--accent); line-height: 1.1; font-variant-numeric: tabular-nums; }
+  .kpi .l { color: var(--muted); font-size: 12px; }
+  .kpi .r { color: var(--faint); font-size: 12px; }
+  svg { display: block; overflow: visible; }
+  svg text { fill: var(--muted); font-size: 10px; }
+  .chart-hint { color: var(--faint); font-size: 11px; margin-top: 2px; }
+  .leg-ligne { font-size: 11px; color: var(--muted); display: flex; gap: 12px; margin-top: 4px; }
+  .leg-ligne i { display: inline-block; width: 12px; height: 8px; margin-right: 4px; vertical-align: middle; }
+
+  /* fiche commune */
+  .fiche-vide { color: var(--muted); }
+  .fiche-tete { display: flex; justify-content: space-between; align-items: start; gap: 8px; }
+  .fiche-tete h3 { margin: 0; font-size: 19px; }
+  .fermer { border: 0; background: transparent; cursor: pointer; font-size: 18px; color: var(--muted); line-height: 1; }
+  .trio { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 10px 0 4px; text-align: center; }
+  .trio div { border: 1px solid var(--border); border-radius: 8px; padding: 6px 4px; }
+  .trio div.on { border-color: var(--accent); background: var(--accent-soft); }
+  .trio b { display: block; font-size: 18px; font-variant-numeric: tabular-nums; }
+  .trio span { font-size: 11px; color: var(--muted); }
+  .sous { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); margin: 14px 0 6px; font-weight: 600; }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .stats b { display: block; font-size: 18px; color: var(--hist); font-variant-numeric: tabular-nums; }
+  .stats span { font-size: 11px; color: var(--muted); }
+  .phrase { margin: 6px 0 0; }
+
+  ol.top { margin: 0; padding: 0; list-style: none; counter-reset: rang; }
+  ol.top li { counter-increment: rang; }
+  ol.top button { width: 100%; display: flex; gap: 8px; align-items: center; border: 0; background: transparent;
+                  padding: 5px 4px; border-radius: 6px; cursor: pointer; text-align: left; }
+  ol.top button:hover { background: var(--accent-soft); }
+  ol.top button::before { content: counter(rang); color: var(--faint); width: 16px; font-variant-numeric: tabular-nums; }
+  ol.top .nom { flex: 1; }
+  ol.top .barre { width: 70px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+  ol.top .barre i { display: block; height: 100%; }
+  ol.top .val { width: 46px; text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  .legend { background: var(--panel); color: var(--text); padding: 8px 10px; border-radius: 8px;
+            border: 1px solid var(--border); font-size: 12px; line-height: 18px; box-shadow: var(--shadow); }
+  .legend i { display: inline-block; width: 14px; height: 12px; margin-right: 6px; vertical-align: -1px; border-radius: 2px; }
+  .leaflet-tooltip { font: 13px/1.35 system-ui, -apple-system, sans-serif; }
+  footer { color: var(--muted); font-size: 12px; padding: 0 20px 24px; max-width: 1100px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Risque de départ de feu de forêt en 2027 · zone méditerranéenne</h1>
+  <p>15 départements, 3 505 communes. Cliquez sur une commune pour voir son historique de feux et son risque semaine par semaine.</p>
+</header>
+<details class="aide">
+  <summary>Comment lire ce tableau de bord ?</summary>
+  <p><b>Semaine par semaine</b> : probabilité qu'au moins un feu de forêt démarre dans la commune pendant la semaine choisie.
+  <b>Saison juin-sept.</b> : nombre de jours avec au moins un départ de feu attendus sur la saison, comparable à l'historique.
+  <b>Feux passés</b> : feux réellement recensés de 2016 à 2025.</p>
+  <p>Le risque est calculé par un modèle de machine learning (gradient boosting) entraîné sur 10 ans de feux réels (BDIFF, 2016-2025)
+  et de météo (Météo-France SIM2 : pluie, température, vent, humidité de l'air et des sols).</p>
+  <p><b>Les scénarios.</b> La météo de 2027 n'est pas connue : le modèle est rejoué avec la météo réelle de chacune des 30 années 1996 à 2025,
+  ce qui donne 30 futurs possibles. <i>Optimiste</i> = seule 1 année sur 10 fait mieux · <i>Central</i> = année typique (médiane) ·
+  <i>Pessimiste</i> = 1 année sur 10 fait pire. L'historique de feux des communes est celui connu fin 2025.</p>
+  <p><b>Prudence.</b> C'est un outil de planification, pas une prévision au jour près. __PRUDENCE__</p>
+</details>
+
+<div class="filtres">
+  <div class="f"><span>Département</span>
+    <select id="dept" aria-label="Département"></select>
+  </div>
+  <div class="f"><span>Afficher</span>
+    <div class="seg" id="mode">
+      <button data-v="semaine">Semaine par semaine</button>
+      <button data-v="saison">Saison juin-sept.</button>
+      <button data-v="hist">Feux passés 2016-2025</button>
+    </div>
+  </div>
+  <div class="f" id="f-niveau"><span>Scénario</span>
+    <div class="seg" id="niveau"></div>
+  </div>
+  <div class="f" id="f-semaine"><span>Semaine de 2027</span>
+    <div class="semaine">
+      <button class="play" id="play" title="Animer les semaines" aria-label="Animer les semaines">▶</button>
+      <input type="range" id="semaine" min="1" max="52" value="29" aria-label="Semaine">
+      <b id="semaine-txt"></b>
+    </div>
+  </div>
+  <div class="f" id="f-classes"><span>Niveaux de risque affichés (semaine)</span>
+    <div class="chips" id="classes"></div>
+  </div>
+  <div class="f recherche"><span>Rechercher une commune</span>
+    <input id="recherche" list="liste-communes" placeholder="ex. Martigues" autocomplete="off">
+    <datalist id="liste-communes"></datalist>
+  </div>
+  <label class="toggle" id="f-cercles"><input type="checkbox" id="cercles"> Superposer les feux passés</label>
+</div>
+
+<main>
+  <div id="map"></div>
+  <aside>
+    <div class="card" id="fiche"></div>
+    <div class="card">
+      <h2 id="kpi-titre">Zone</h2>
+      <div class="kpis">
+        <div class="kpi"><div class="v" id="kpi1"></div><div class="l" id="kpi1-l"></div><div class="r" id="kpi1-r"></div></div>
+        <div class="kpi"><div class="v" id="kpi2"></div><div class="l" id="kpi2-l"></div><div class="r" id="kpi2-r"></div></div>
+      </div>
+      <div class="sous" id="chart-titre">Feux attendus par semaine</div>
+      <div id="chart-dept"></div>
+      <div class="leg-ligne"><span><i style="background:var(--band);opacity:.45"></i>fourchette optimiste – pessimiste</span><span><i style="background:var(--accent);height:3px"></i>central</span></div>
+      <div class="chart-hint">Cliquez sur le graphique pour choisir une semaine.</div>
+    </div>
+    <div class="card">
+      <h2 id="top-titre">Communes les plus exposées</h2>
+      <ol class="top" id="top"></ol>
+    </div>
+  </aside>
+</main>
+<footer>
+  Sources : BDIFF (Ministère de l'Agriculture) · Météo-France, données SIM2 (Licence Ouverte Etalab) · geo.api.gouv.fr (Licence Ouverte) ·
+  fond de carte © OpenStreetMap. « Feux attendus » = nombre attendu de jours-commune avec au moins un départ de feu.
+</footer>
+
+<script>
+const DATA = __DATA__;
+const GEO = __GEO__;
+
+// ------------------------------------------------------------------ échelles
+const RISQUE = [
+  { id: 0, nom: "Faible",     max: 0.05, couleur: "#fde7a8" },
+  { id: 1, nom: "Modéré",     max: 0.20, couleur: "#f9a24b" },
+  { id: 2, nom: "Élevé",      max: 0.50, couleur: "#dc4a1e" },
+  { id: 3, nom: "Très élevé", max: 1.01, couleur: "#6e0d0d" },
+];
+const R_BREAKS = [0.01, 0.02, 0.05, 0.10, 0.20, 0.35, 0.50];
+const R_COLORS = ["#fffdf3", "#fff1c2", "#fde7a8", "#fbc46b", "#f9a24b", "#ee7432", "#dc4a1e", "#6e0d0d"];
+const S_COLORS = R_COLORS.slice(1);
+const H_BREAKS = [1, 3, 6, 11, 21, 41];
+const H_COLORS = ["#f4f1fb", "#ddd3f5", "#c0aeec", "#9f83df", "#7c58cc", "#5b34ad", "#3b1d7a"];
+const S_BREAKS = [0.25, 0.5, 1, 2, 4, 8];
+const couleurSaison = v => S_COLORS[classe(S_BREAKS, v)];
+const classe = (b, p) => { let i = 0; while (i < b.length && p >= b[i]) i++; return i; };
+const couleurRisque = p => R_COLORS[classe(R_BREAKS, p)];
+const couleurHist = n => H_COLORS[classe(H_BREAKS, n)];
+const classeRisque = p => RISQUE.findIndex(c => p < c.max);
+const pct = p => p > 0 && p < 0.01 ? "< 1 %" : p >= 0.995 ? "> 99 %" : Math.round(p * 100) + " %";
+const fmt = (v, d = 0) => v.toLocaleString("fr-FR", { minimumFractionDigits: d, maximumFractionDigits: d });
+const MOIS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+
+// ------------------------------------------------------------------ état
+// probabilités stockées en pour mille (entiers) pour alléger la page
+const etat = { dept: "*", mode: "semaine", niveau: "p50", semaine: 29, classes: new Set([0, 1, 2, 3]), selection: null, cercles: false, lecture: null };
+const codes = Object.keys(DATA.communes);
+const codeParNom = {};
+codes.forEach(c => {
+  const k = DATA.communes[c], cle = k.nom.toLowerCase();
+  codeParNom[cle] = c; codeParNom[`${cle} (${k.dept})`] = c;
+});
+const nomDept = Object.fromEntries(DATA.depts.map(d => [d.code, d.nom]));
+const dansDept = c => etat.dept === "*" || DATA.communes[c].dept === etat.dept;
+const proba = (niv, c, w) => DATA.semaine[niv][c][w - 1] / 1000;
+
+function valeur(code) {
+  if (etat.mode === "semaine") return proba(etat.niveau, code, etat.semaine);
+  if (etat.mode === "saison") return DATA.saison_jours[etat.niveau][code];
+  return DATA.communes[code].feux;
+}
+
+// ------------------------------------------------------------------ filtres
+const elDept = document.getElementById("dept");
+elDept.innerHTML = `<option value="*">Toute la zone (15 dép.)</option>` +
+  DATA.depts.map(d => `<option value="${d.code}">${d.code} · ${d.nom}</option>`).join("");
+elDept.onchange = () => {
+  etat.dept = elDept.value;
+  if (etat.selection && !dansDept(etat.selection)) { const a = etat.selection; etat.selection = null; styler(a); }
+  cadrer(); maj();
+};
+
+function segment(id, options, cle) {
+  const box = document.getElementById(id);
+  options.forEach(o => {
+    const b = document.createElement("button");
+    b.dataset.v = o.v; b.textContent = o.t; if (o.title) b.title = o.title;
+    box.appendChild(b);
+  });
+  box.addEventListener("click", e => {
+    const b = e.target.closest("button"); if (!b || b.disabled) return;
+    etat[cle] = b.dataset.v; maj();
+  });
+}
+segment("niveau", DATA.niveaux.map(n => ({ v: n.id, t: n.nom, title: n.detail })), "niveau");
+document.getElementById("mode").addEventListener("click", e => {
+  const b = e.target.closest("button"); if (!b) return;
+  etat.mode = b.dataset.v; maj();
+});
+
+const chipBox = document.getElementById("classes");
+RISQUE.forEach(c => {
+  const s = document.createElement("span");
+  s.className = "chip"; s.dataset.v = c.id; s.setAttribute("role", "checkbox"); s.tabIndex = 0;
+  s.innerHTML = `<i style="background:${c.couleur}"></i>${c.nom}`;
+  const bascule = () => { etat.classes.has(c.id) ? etat.classes.delete(c.id) : etat.classes.add(c.id); maj(); };
+  s.onclick = bascule; s.onkeydown = e => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); bascule(); } };
+  chipBox.appendChild(s);
+});
+
+const elSemaine = document.getElementById("semaine");
+elSemaine.oninput = () => { etat.semaine = +elSemaine.value; maj(); };
+document.getElementById("play").onclick = () => {
+  const btn = document.getElementById("play");
+  if (etat.lecture) { clearInterval(etat.lecture); etat.lecture = null; btn.textContent = "▶"; return; }
+  if (etat.mode !== "semaine") { etat.mode = "semaine"; }
+  btn.textContent = "❚❚";
+  etat.lecture = setInterval(() => { etat.semaine = etat.semaine % 52 + 1; maj(); }, 800);
+};
+
+// homonymes (ex. plusieurs « Saint-Martin ») : on ajoute le département entre parenthèses
+const compteNoms = {};
+codes.forEach(c => { const n = DATA.communes[c].nom; compteNoms[n] = (compteNoms[n] || 0) + 1; });
+document.getElementById("liste-communes").innerHTML = codes
+  .map(c => { const k = DATA.communes[c]; return compteNoms[k.nom] > 1 ? `${k.nom} (${k.dept})` : k.nom; })
+  .sort((a, b) => a.localeCompare(b, "fr")).map(n => `<option value="${n}">`).join("");
+const elRecherche = document.getElementById("recherche");
+elRecherche.addEventListener("change", () => {
+  const c = codeParNom[elRecherche.value.trim().toLowerCase()];
+  if (c) { selectionner(c, true); elRecherche.value = ""; }
+});
+document.getElementById("cercles").onchange = e => { etat.cercles = e.target.checked; maj(); };
+
+// ------------------------------------------------------------------ carte
+// rendu canvas : bien plus fluide que 3 505 objets SVG
+const map = L.map("map", { zoomSnap: 0.25, preferCanvas: true });
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 15, attribution: "© OpenStreetMap" }).addTo(map);
+
+function infobulle(c) {
+  const k = DATA.communes[c], v = valeur(c), hist = etat.mode === "hist";
+  const ligne = hist ? `${fmt(v)} feu${v > 1 ? "x" : ""} recensé${v > 1 ? "s" : ""} (2016-2025)`
+    : `${etat.mode === "semaine" ? pct(v) + " de risque cette semaine" : fmt(v, 1) + " jours avec feu attendus (juin-sept.)"}<br><span style="opacity:.7">${fmt(k.feux)} feux passés · cliquer pour le détail</span>`;
+  return `<b>${k.nom}</b> <span style="opacity:.6">(${k.dept})</span><br>${ligne}`;
+}
+
+const couches = {};
+const couche = L.geoJSON(GEO, {
+  style: () => ({ color: "#ffffff", weight: 0.4, fillOpacity: 0.8 }),
+  onEachFeature: (f, layer) => {
+    const c = f.properties.code;
+    couches[c] = layer;
+    layer.bindTooltip(() => infobulle(c), { sticky: true, direction: "top", offset: [0, -6] });
+    layer.on("click", () => selectionner(c, false));
+    layer.on("mouseover", () => { if (etat.selection !== c) layer.setStyle({ weight: 2, color: "#333" }); });
+    layer.on("mouseout", () => styler(c));
+  }
+}).addTo(map);
+
+function cadrer() {
+  const groupe = etat.dept === "*" ? couche : L.featureGroup(codes.filter(dansDept).map(c => couches[c]).filter(Boolean));
+  map.fitBounds(groupe.getBounds(), { padding: [10, 10] });
+}
+cadrer();
+
+const coucheCercles = L.layerGroup();
+function majCercles() {
+  coucheCercles.clearLayers();
+  codes.forEach(c => {
+    const k = DATA.communes[c];
+    if (!k.feux || !dansDept(c)) return;
+    L.circleMarker([k.lat, k.lon], {
+      radius: 2 + Math.sqrt(k.feux) * 1.3, color: "#3b1d7a", weight: 1, fillColor: "#7c3aed", fillOpacity: 0.35, interactive: false
+    }).addTo(coucheCercles);
+  });
+}
+
+function styler(code) {
+  const layer = couches[code]; if (!layer) return;
+  const v = valeur(code);
+  const visible = dansDept(code) && (etat.mode !== "semaine" || etat.classes.has(classeRisque(v)));
+  const sel = etat.selection === code;
+  layer.setStyle({
+    fillColor: etat.mode === "semaine" ? couleurRisque(v) : etat.mode === "saison" ? couleurSaison(v) : couleurHist(v),
+    fillOpacity: visible ? 0.82 : 0.06,
+    color: sel ? "#111" : "#ffffff",
+    weight: sel ? 3 : 0.4,
+  });
+  if (sel) layer.bringToFront();
+}
+
+const legende = L.control({ position: "bottomright" });
+legende.onAdd = () => L.DomUtil.create("div", "legend");
+legende.addTo(map);
+function majLegende() {
+  const d = legende.getContainer();
+  if (etat.mode === "hist") {
+    const b = [0, ...H_BREAKS];
+    d.innerHTML = "<b>Feux recensés 2016-2025</b><br>" + b.map((v, i) =>
+      `<i style="background:${H_COLORS[i]}"></i>${i < H_BREAKS.length ? (v === H_BREAKS[i] - 1 ? v : v + "–" + (H_BREAKS[i] - 1)) : v + " et plus"}`).join("<br>");
+  } else if (etat.mode === "saison") {
+    const b = [0, ...S_BREAKS], f = v => fmt(v, v < 1 && v > 0 ? 2 : 0);
+    d.innerHTML = "<b>Jours avec feu attendus<br>de juin à septembre</b><br>" + b.map((v, i) =>
+      `<i style="background:${S_COLORS[i]}"></i>${i < S_BREAKS.length ? f(v) + " – " + f(S_BREAKS[i]) : f(v) + " et plus"}`).join("<br>") +
+      (etat.cercles ? `<br><i style="background:#7c3aed;opacity:.5;border-radius:50%"></i>feux passés` : "");
+  } else {
+    const b = [0, ...R_BREAKS];
+    d.innerHTML = "<b>Proba. ≥ 1 feu dans la semaine</b><br>" + b.map((v, i) =>
+      `<i style="background:${R_COLORS[i]}"></i>${Math.round(v * 100)}${i < R_BREAKS.length ? "–" + Math.round(R_BREAKS[i] * 100) : "+"} %`).join("<br>") +
+      (etat.cercles ? `<br><i style="background:#7c3aed;opacity:.5;border-radius:50%"></i>feux passés` : "");
+  }
+}
+
+// ------------------------------------------------------------------ graphiques SVG
+function courbeBande(p10, p50, p90, opts) {
+  const W = 340, H = opts.h || 110, m = { l: 28, r: 6, t: 8, b: 18 };
+  const max = opts.max || Math.max(...p90) || 1;
+  const x = w => m.l + (w - 1) / 51 * (W - m.l - m.r);
+  const y = v => H - m.b - v / max * (H - m.t - m.b);
+  const pts = arr => arr.map((v, i) => `${x(i + 1).toFixed(1)},${y(v).toFixed(1)}`);
+  let s = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="${opts.label}" ${opts.id ? `id="${opts.id}"` : ""} style="cursor:${opts.clic ? "pointer" : "default"}">`;
+  [0, max / 2, max].forEach(v => {
+    s += `<line x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}" stroke="currentColor" opacity=".1"/>`;
+    s += `<text x="${m.l - 4}" y="${y(v) + 3}" text-anchor="end">${opts.pct ? Math.round(v * 100) + "%" : fmt(v, v < 10 && v > 0 ? 1 : 0)}</text>`;
+  });
+  [["janv.", 1], ["avr.", 14], ["juil.", 27], ["oct.", 40]].forEach(([t, w]) => { s += `<text x="${x(w)}" y="${H - 4}">${t}</text>`; });
+  s += `<polygon points="${pts(p90).concat(pts(p10).reverse()).join(" ")}" fill="var(--band)" opacity=".3"/>`;
+  s += `<polyline points="${pts(p50).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="2"/>`;
+  if (opts.actif && opts.actif !== p50) s += `<polyline points="${pts(opts.actif).join(" ")}" fill="none" stroke="var(--accent)" stroke-width="1.3" stroke-dasharray="4 3"/>`;
+  if (opts.semaine) {
+    s += `<line x1="${x(opts.semaine)}" x2="${x(opts.semaine)}" y1="${m.t}" y2="${H - m.b}" stroke="currentColor" opacity=".45" stroke-dasharray="3 3"/>`;
+    if (opts.actif) s += `<circle cx="${x(opts.semaine)}" cy="${y(opts.actif[opts.semaine - 1])}" r="3.5" fill="var(--accent)"/>`;
+  }
+  return s + "</svg>";
+}
+
+function barres(vals, labels, couleur, h = 70) {
+  const W = 340, m = { l: 4, r: 4, t: 12, b: 16 };
+  const max = Math.max(...vals, 1), n = vals.length, bw = (W - m.l - m.r) / n;
+  let s = `<svg viewBox="0 0 ${W} ${h}" width="100%" role="img">`;
+  vals.forEach((v, i) => {
+    const bh = v / max * (h - m.t - m.b), x0 = m.l + i * bw + 2;
+    s += `<rect x="${x0}" y="${h - m.b - bh}" width="${bw - 4}" height="${Math.max(bh, v ? 1.5 : 0)}" rx="2" fill="${couleur}"><title>${labels[i]} : ${v}</title></rect>`;
+    if (v) s += `<text x="${x0 + (bw - 4) / 2}" y="${h - m.b - bh - 3}" text-anchor="middle">${v}</text>`;
+    s += `<text x="${x0 + (bw - 4) / 2}" y="${h - 4}" text-anchor="middle">${labels[i]}</text>`;
+  });
+  return s + "</svg>";
+}
+
+// ------------------------------------------------------------------ fiche commune
+function selectionner(code, zoomer) {
+  const avant = etat.selection;
+  etat.selection = code;
+  if (avant) styler(avant);
+  if (!dansDept(code)) { etat.dept = "*"; elDept.value = "*"; }
+  if (zoomer && couches[code]) map.flyToBounds(couches[code].getBounds(), { maxZoom: 11, duration: 0.6 });
+  maj();
+}
+
+function majFiche() {
+  const el = document.getElementById("fiche");
+  const c = etat.selection;
+  if (!c) {
+    el.innerHTML = `<h2>Fiche commune</h2><p class="fiche-vide">Cliquez sur une commune de la carte, dans le classement ou utilisez la recherche
+      pour afficher son nombre de feux passés et son risque en 2027.</p>`;
+    return;
+  }
+  const k = DATA.communes[c], w = etat.semaine, n = etat.niveau;
+  const serie = niv => DATA.semaine[niv][c].map(v => v / 1000);
+  const trio = DATA.niveaux.map(v => `<div class="${v.id === n ? "on" : ""}"><b>${pct(proba(v.id, c, w))}</b><span>${v.nom}</span></div>`).join("");
+  const an = DATA.annuel, sa = DATA.saison;
+  el.innerHTML = `
+    <div class="fiche-tete"><div><h2>Fiche commune</h2><h3>${k.nom}</h3>
+      <span class="fiche-vide">${nomDept[k.dept]} (${k.dept}) · ${fmt(k.pop)} hab.</span></div>
+      <button class="fermer" id="fermer" title="Fermer" aria-label="Fermer la fiche">✕</button></div>
+
+    <div class="sous">Feux passés · 2016-2025</div>
+    <div class="stats">
+      <div><b>${fmt(k.feux)}</b><span>feux recensés</span></div>
+      <div><b>${fmt(k.jours)}</b><span>jours avec feu</span></div>
+      <div><b>${k.surface < 10 ? fmt(k.surface, 1) : fmt(k.surface)}</b><span>hectares brûlés</span></div>
+    </div>
+    ${k.feux ? `<div class="sous">Par année</div>${barres(k.par_annee, DATA.annees.map(a => "’" + String(a).slice(2)), "var(--hist)")}
+    <div class="sous">Par mois</div>${barres(k.par_mois, MOIS.map(m => m[0].toUpperCase()), "var(--hist)", 62)}`
+    : `<p class="phrase fiche-vide">Aucun feu de forêt recensé dans la BDIFF sur la période.</p>`}
+
+    <div class="sous">Risque 2027 · semaine ${w}</div>
+    <div class="trio">${trio}</div>
+    ${courbeBande(serie("p10"), serie("p50"), serie("p90"), { label: "Risque hebdomadaire de la commune", pct: true, h: 100, semaine: w, actif: serie(n) })}
+    <p class="phrase">Sur toute l'année 2027 (scénario central) : <b>${fmt(an.p50[c], 1)}</b> jours avec feu attendus
+      <span class="fiche-vide">(fourchette ${fmt(an.p10[c], 1)} – ${fmt(an.p90[c], 1)})</span>.<br>
+      De juin à septembre : <b>${fmt(DATA.saison_jours.p50[c], 1)}</b> jours avec feu attendus
+      (en moyenne ${fmt(k.jours_ete / DATA.annees.length, 1)} par an sur 2016-2025) ;
+      probabilité d'au moins un feu : <b>${pct(sa.p50[c] / 1000)}</b>.</p>`;
+  document.getElementById("fermer").onclick = () => { const a = etat.selection; etat.selection = null; styler(a); maj(); };
+}
+
+// ------------------------------------------------------------------ zone / département + classement
+function majDept() {
+  const n = etat.niveau, w = etat.semaine, z = DATA.zones[etat.dept], d = z.semaine;
+  const lieu = etat.dept === "*" ? "Zone méditerranéenne" : `${nomDept[etat.dept]} (${etat.dept})`;
+  const liste = codes.filter(dansDept);
+  const v1 = document.getElementById("kpi1"), v2 = document.getElementById("kpi2");
+  const txt = (id, t) => { document.getElementById(id).textContent = t; };
+  if (etat.mode === "hist") {
+    txt("kpi-titre", `${lieu} · 2016-2025`);
+    v1.textContent = fmt(z.feux); txt("kpi1-l", "feux de forêt recensés");
+    txt("kpi1-r", `${fmt(z.jours)} jours-commune avec feu`);
+    v2.textContent = fmt(liste.filter(c => DATA.communes[c].feux > 0).length);
+    txt("kpi2-l", `communes touchées sur ${fmt(liste.length)}`); txt("kpi2-r", "");
+  } else if (etat.mode === "saison") {
+    txt("kpi-titre", `${lieu} · juin à septembre 2027`);
+    v1.textContent = fmt(z.saison[n]); txt("kpi1-l", "jours-commune avec feu attendus");
+    txt("kpi1-r", `fourchette ${fmt(z.saison.p10)} – ${fmt(z.saison.p90)} · réel 2016-2025 : ${fmt(z.saison_reel)} / an`);
+    v2.textContent = fmt(liste.filter(c => DATA.saison_jours[n][c] >= 1).length);
+    txt("kpi2-l", "communes avec au moins 1 jour avec feu attendu"); txt("kpi2-r", "");
+  } else {
+    txt("kpi-titre", `${lieu} · semaine ${w}`);
+    v1.textContent = fmt(d[n][w - 1], 1); txt("kpi1-l", "jours-commune avec feu attendus cette semaine");
+    txt("kpi1-r", `fourchette ${fmt(d.p10[w - 1], 1)} – ${fmt(d.p90[w - 1], 1)}`);
+    v2.textContent = fmt(liste.filter(c => proba(n, c, w) >= 0.2).length);
+    txt("kpi2-l", "communes en risque élevé ou très élevé"); txt("kpi2-r", "(≥ 20 % cette semaine)");
+  }
+  txt("chart-titre", `Feux attendus par semaine · ${etat.dept === "*" ? "zone" : etat.dept}`);
+  document.getElementById("chart-dept").innerHTML =
+    courbeBande(d.p10, d.p50, d.p90, { label: "Feux attendus par semaine", semaine: etat.mode === "semaine" ? w : null, actif: d[n], clic: true, id: "svg-dept" });
+  const svg = document.getElementById("svg-dept");
+  svg.onclick = e => {
+    const r = svg.getBoundingClientRect(), xr = (e.clientX - r.left) / r.width * 340;
+    etat.semaine = Math.min(52, Math.max(1, Math.round((xr - 28) / (340 - 34) * 51 + 1)));
+    etat.mode = "semaine"; maj();
+  };
+}
+
+function majTop() {
+  const titre = { semaine: "Communes les plus exposées cette semaine", saison: "Jours avec feu attendus de juin à septembre", hist: "Communes avec le plus de feux 2016-2025" }[etat.mode];
+  document.getElementById("top-titre").textContent = titre;
+  const liste = codes.filter(dansDept).map(c => [c, valeur(c)]).sort((a, b) => b[1] - a[1]).slice(0, 10);
+  const max = liste[0][1] || 1;
+  document.getElementById("top").innerHTML = liste.map(([c, v]) => {
+    const coul = etat.mode === "hist" ? couleurHist(v) : etat.mode === "saison" ? couleurSaison(v) : couleurRisque(v);
+    const txt = etat.mode === "hist" ? fmt(v) : etat.mode === "saison" ? fmt(v, 1) + " j" : pct(v);
+    return `<li><button data-c="${c}"><span class="nom">${DATA.communes[c].nom} <span style="color:var(--faint)">${DATA.communes[c].dept}</span></span>
+      <span class="barre"><i style="width:${v / max * 100}%;background:${coul}"></i></span><span class="val">${txt}</span></button></li>`;
+  }).join("");
+}
+document.getElementById("top").addEventListener("click", e => {
+  const b = e.target.closest("button[data-c]"); if (b) selectionner(b.dataset.c, true);
+});
+
+// ------------------------------------------------------------------ mise à jour générale
+function libelleSemaine(w) {
+  const d1 = new Date(2027, 0, 1 + 7 * (w - 1)), d2 = new Date(2027, 0, 7 * w);
+  const f = d => d.getDate() + " " + MOIS[d.getMonth()];
+  return `S${w} · ${f(d1)} – ${f(d2)}`;
+}
+
+function maj() {
+  if (etat.lecture && etat.mode !== "semaine") { clearInterval(etat.lecture); etat.lecture = null; document.getElementById("play").textContent = "▶"; }
+  document.querySelectorAll("#mode button").forEach(b => b.classList.toggle("on", b.dataset.v === etat.mode));
+  document.querySelectorAll("#niveau button").forEach(b => b.classList.toggle("on", b.dataset.v === etat.niveau));
+  document.querySelectorAll("#classes .chip").forEach(s => {
+    const on = etat.classes.has(+s.dataset.v); s.classList.toggle("off", !on); s.setAttribute("aria-checked", on);
+  });
+  const hist = etat.mode === "hist";
+  document.getElementById("f-niveau").classList.toggle("is-off", hist);
+  document.getElementById("f-semaine").classList.toggle("is-off", etat.mode !== "semaine");
+  document.getElementById("f-classes").classList.toggle("is-off", etat.mode !== "semaine");
+  document.getElementById("f-cercles").classList.toggle("is-off", hist);
+  elSemaine.value = etat.semaine;
+  document.getElementById("semaine-txt").textContent = libelleSemaine(etat.semaine);
+
+  if (etat.cercles && !hist) { majCercles(); coucheCercles.addTo(map); } else coucheCercles.remove();
+
+  codes.forEach(styler);
+  majLegende(); majFiche(); majDept(); majTop();
+}
+
+maj();
+</script>
+</body>
+</html>

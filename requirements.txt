@@ -1,0 +1,27 @@
+# Dépendances directes du projet (Python 3.13)
+# Installation : pip install -r requirements.txt
+
+# données et calcul
+pandas==3.1.1
+numpy==2.3.5            # < 2.4 : dernières roues disponibles pour Mac Intel
+pyarrow==26.0.1         # format Parquet
+scikit-learn==1.9.1
+joblib==1.6.0           # sauvegarde du modèle
+
+# géographie
+geopandas==1.2.0        # contours des communes, simplification
+shapely==2.2.0
+pyogrio==0.13.0
+
+# collecte
+requests==2.34.2
+
+# visualisation
+matplotlib==3.11.2
+folium==0.20.0
+branca==0.8.2
+
+# notebooks
+jupyterlab==4.6.6
+ipykernel==7.4.0
+nbformat==5.11.1
